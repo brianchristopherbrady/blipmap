@@ -1,0 +1,12 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "type": "command",
+        "command": "python3 .github/hooks/scripts/post-edit-typecheck.py",
+        "windows": "python .github/hooks/scripts/post-edit-typecheck.py",
+        "timeout": 45
+      }
+    ]
+  }
+}

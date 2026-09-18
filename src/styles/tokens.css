@@ -1,0 +1,22 @@
+:root {
+  /* Text */
+  --ink: #2b2b2b;
+  --muted: #6b6b6b;
+
+  /* Surfaces */
+  --paper: #f5f3ee;
+  --paper-raised: #ffffff;
+  --line: #ddd9d0;
+
+  /* Accents */
+  --moss: #4a7c59;
+  --warning: #d4732a;
+  --danger: #c0392b;
+
+  /* Shape */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+
+  /* Elevation */
+  --shadow-float: 0 2px 12px rgba(0, 0, 0, 0.12);
+}

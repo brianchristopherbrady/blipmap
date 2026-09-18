@@ -1,0 +1,12 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "type": "command",
+        "command": "python3 .github/hooks/scripts/guard-dangerous-commands.py",
+        "windows": "python .github/hooks/scripts/guard-dangerous-commands.py",
+        "timeout": 5
+      }
+    ]
+  }
+}

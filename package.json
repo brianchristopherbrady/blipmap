@@ -1,0 +1,38 @@
+{
+  "name": "blipmap",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "start": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest",
+    "test:browser": "playwright test"
+  },
+  "dependencies": {
+    "@lit/react": "^1.0.5",
+    "@supabase/supabase-js": "^2.116.0",
+    "@turf/bbox": "^7.1.0",
+    "@turf/helpers": "^7.1.0",
+    "@turf/length": "^7.1.0",
+    "@turf/point-to-line-distance": "^7.1.0",
+    "idb": "^8.0.0",
+    "lit": "^3.2.0",
+    "maplibre-gl": "^4.7.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@playwright/test": "^1.63.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "fake-indexeddb": "^6.2.5",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10",
+    "vitest": "^2.1.3"
+  }
+}
