@@ -7,6 +7,7 @@ export class CurbToolButton extends LitElement {
   @property({ type: String }) icon = "";
   @property({ type: Boolean, reflect: true }) active = false;
   @property({ type: Boolean, reflect: true }) disabled = false;
+  @property({ type: Boolean, reflect: true }) highlight = false;
   @property({ type: String }) shortcut = "";
 
   static styles = css`
@@ -30,6 +31,10 @@ export class CurbToolButton extends LitElement {
       transition: background 100ms ease;
     }
 
+    @media (prefers-reduced-motion: reduce) {
+      button { transition: none; }
+    }
+
     button:hover:not(:disabled) { background: var(--line, #ddd9d0); }
 
     button:focus-visible {
@@ -39,7 +44,17 @@ export class CurbToolButton extends LitElement {
 
     :host([active]) button {
       background: var(--moss, #4a7c59);
-      color: #fff;
+      color: var(--on-accent, #fff);
+    }
+
+    /* The one action we want a user's eye to land on first: not selected yet,
+       but visually the obvious next step (e.g. "plan a route"). */
+    :host([highlight]:not([active])) button {
+      color: var(--moss, #4a7c59);
+      box-shadow: inset 0 0 0 2px var(--moss, #4a7c59);
+    }
+    :host([highlight]:not([active])) button:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--moss, #4a7c59) 12%, transparent);
     }
 
     :host([disabled]) button {
@@ -64,6 +79,12 @@ export class CurbToolButton extends LitElement {
       font-size: 0.48rem;
       opacity: 0.45;
       font-family: monospace;
+    }
+
+    @media (max-width: 600px) {
+      button { width: 58px; height: 56px; gap: 4px; }
+      .icon { font-size: 1.1rem; }
+      .label { font-size: 0.6rem; }
     }
   `;
 

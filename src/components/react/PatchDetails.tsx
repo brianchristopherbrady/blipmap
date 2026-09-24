@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { Patch } from "../../types/patch";
 import { CATEGORY_LABELS, SEVERITY_LABELS, STATUS_LABELS } from "../../types/patch";
-import { SEATTLE_SOURCE_URL } from "../../gis/seattleBaseline";
+import { getDataset } from "../../config/regions";
 import { resolveSidewalkReports, type SidewalkReports } from "../../data/sidewalkImagery";
 
 interface PatchDetailsProps {
@@ -57,6 +57,7 @@ export function PatchDetails({ patch, onClose, onEdit }: PatchDetailsProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const { properties, geometry } = patch;
+  const dataset = getDataset(properties.source?.provider ?? "");
 
   useEffect(() => {
     const dialog = dialogRef.current!;
@@ -93,8 +94,17 @@ export function PatchDetails({ patch, onClose, onEdit }: PatchDetailsProps) {
       {properties.source && (
         <section className="patch-details__notes" aria-label="External source">
           <h3>External source</h3>
-          <p><a href={SEATTLE_SOURCE_URL} target="_blank" rel="noopener noreferrer">Project Sidewalk Seattle source information</a></p>
-          <p>Observation data is CC0. This does not license the source imagery.</p>
+          {dataset?.informationUrl && <p><a href={dataset.informationUrl} target="_blank" rel="noopener noreferrer">{dataset.name} source information</a></p>}
+          <p>{dataset?.license ? `Observation data: ${dataset.license.id}. ${dataset.license.scope}.` : "Source license not configured."}</p>
+          {dataset?.license?.url && <p><a href={dataset.license.url} target="_blank" rel="noopener noreferrer">Source use terms</a></p>}
+          {dataset?.adapter === "portland-curb-ramps" ? <>
+            <p>Municipal inventory, not a live inspection. Observation date unknown; current conditions may differ.</p>
+            <dl className="patch-details__metadata">
+              <div><dt>Municipal record ID</dt><dd>{properties.source.sourceId}</dd></div>
+              <div><dt>Detectable warning</dt><dd>Recorded absent (ADAWarnings=N)</dd></div>
+              <div><dt>Observation date</dt><dd>Unknown</dd></div>
+            </dl>
+          </> : <>
           <p>Imagery-based report. Conditions may have changed; source validation is not local verification.</p>
           <dl className="patch-details__metadata">
             <div><dt>Source cluster</dt><dd>{properties.source.sourceId}</dd></div>
@@ -108,9 +118,10 @@ export function PatchDetails({ patch, onClose, onEdit }: PatchDetailsProps) {
             <div><dt>Unsure votes</dt><dd>{properties.source.unsureCount ?? "Unknown"}</dd></div>
           </dl>
           <p>Validation totals may include human and AI judgments.</p>
+          </>}
         </section>
       )}
-      {properties.source && <OriginalReports patch={patch} />}
+      {properties.source && dataset?.adapter === "project-sidewalk" && <OriginalReports patch={patch} />}
       {properties.photo && (
         <section className="patch-details__notes" aria-label="Local photo">
           <h3>Local photo</h3>

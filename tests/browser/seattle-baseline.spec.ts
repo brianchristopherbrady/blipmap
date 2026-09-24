@@ -2,6 +2,7 @@ import { expect, test, type Page, type Route } from "@playwright/test";
 import type { Map as MapLibreMap, GeoJSONSource } from "maplibre-gl";
 import type { Patch } from "../../src/types/patch";
 import { MAP_STYLE } from "../../src/config/map";
+import { DEFAULT_REGION_ID, getRegion } from "../../src/config/regions";
 
 const baseline = {
   type: "FeatureCollection",
@@ -50,7 +51,7 @@ test("Seattle is automatic by default, preserves edits, and persists across relo
   page.on("pageerror", error => errors.push(error.message));
   let requests = 0;
   await page.route("https://sidewalk-sea.cs.washington.edu/v3/api/labelClusters?*", route => {
-    requests++;
+    if (route.request().url() === getRegion(DEFAULT_REGION_ID).sources[0].endpoint) requests++;
     return route.fulfill({ json: baseline });
   });
   await page.goto("/");

@@ -1,7 +1,9 @@
 import type { Patch, PatchCategory, PatchSource } from "../types/patch";
+import { DEFAULT_REGION_ID, getDataset, getRegion, withinBounds, type DatasetConfig } from "../config/regions";
 
-export const SEATTLE_BOUNDS = [-122.459, 47.481, -122.224, 47.735] as const;
-export const SEATTLE_SOURCE_URL = "https://sidewalk-sea.cs.washington.edu/api";
+const defaultSource = getRegion(DEFAULT_REGION_ID).sources[0];
+export const SEATTLE_BOUNDS = defaultSource.validationBounds!;
+export const SEATTLE_SOURCE_URL = defaultSource.informationUrl!;
 
 const BARRIERS: Record<string, { title: string; category: PatchCategory }> = {
   NoCurbRamp: { title: "Missing curb ramp", category: "curb-ramp" },
@@ -25,12 +27,19 @@ function date(value: unknown): string | null {
 
 export function parsePatchSource(value: unknown): PatchSource | null {
   const source = record(value);
-  if (!source || source.provider !== "project-sidewalk-seattle"
+  if (source && typeof source.provider === "string" && getDataset(source.provider)?.adapter === "portland-curb-ramps") {
+    if (typeof source.sourceId !== "string" || !/^[\w-]{1,15}$/.test(source.sourceId)
+      || source.labelType !== "NoDetectableWarning" || !date(source.importedAt)) return null;
+    return { provider: source.provider, sourceId: source.sourceId, labelType: source.labelType,
+      importedAt: source.importedAt as string, averageImageDate: null, averageLabelDate: null,
+      medianSeverity: null, clusterSize: null, agreeCount: null, disagreeCount: null, unsureCount: null };
+  }
+  if (!source || typeof source.provider !== "string" || getDataset(source.provider)?.adapter !== "project-sidewalk"
     || typeof source.sourceId !== "string" || !/^\d+$/.test(source.sourceId)
     || typeof source.labelType !== "string" || !Object.prototype.hasOwnProperty.call(BARRIERS, source.labelType)
     || !date(source.importedAt)) return null;
   return {
-    provider: "project-sidewalk-seattle",
+    provider: source.provider,
     sourceId: source.sourceId,
     labelType: source.labelType,
     importedAt: source.importedAt as string,
@@ -45,9 +54,14 @@ export function parsePatchSource(value: unknown): PatchSource | null {
 }
 
 export function convertSeattleBaseline(raw: unknown, importedAt: string): { patches: Patch[]; skipped: number } {
+  return convertProjectSidewalk(raw, importedAt, defaultSource);
+}
+
+export function convertProjectSidewalk(raw: unknown, importedAt: string, dataset: DatasetConfig): { patches: Patch[]; skipped: number } {
+  if (!dataset.validationBounds || dataset.adapter !== "project-sidewalk") throw new Error("Source bounds and adapter are required.");
   const collection = record(raw);
   if (collection?.type !== "FeatureCollection" || !Array.isArray(collection.features)) {
-    throw new Error("Seattle data is not a GeoJSON FeatureCollection.");
+    throw new Error("Source data is not a GeoJSON FeatureCollection.");
   }
   if (!date(importedAt)) throw new Error("Invalid import date.");
   const patches: Patch[] = [];
@@ -63,8 +77,7 @@ export function convertSeattleBaseline(raw: unknown, importedAt: string): { patc
     if (feature?.type !== "Feature" || geometry?.type !== "Point"
       || !Array.isArray(coordinates) || coordinates.length !== 2
       || !coordinates.every((coordinate) => typeof coordinate === "number" && Number.isFinite(coordinate))
-      || coordinates[0] < SEATTLE_BOUNDS[0] || coordinates[0] > SEATTLE_BOUNDS[2]
-      || coordinates[1] < SEATTLE_BOUNDS[1] || coordinates[1] > SEATTLE_BOUNDS[3]
+      || !withinBounds(coordinates as number[], dataset.validationBounds)
       || !properties || typeof labelType !== "string" || !Object.prototype.hasOwnProperty.call(BARRIERS, labelType)
       || sourceId === null || seen.has(String(sourceId))) {
       skipped++;
@@ -73,7 +86,7 @@ export function convertSeattleBaseline(raw: unknown, importedAt: string): { patc
     seen.add(String(sourceId));
     const barrier = BARRIERS[labelType];
     const source = parsePatchSource({
-      provider: "project-sidewalk-seattle", sourceId: String(sourceId), labelType, importedAt,
+      provider: dataset.id, sourceId: String(sourceId), labelType, importedAt,
       averageImageDate: properties.avg_image_capture_date,
       averageLabelDate: properties.avg_label_date,
       medianSeverity: properties.median_severity,
@@ -85,10 +98,11 @@ export function convertSeattleBaseline(raw: unknown, importedAt: string): { patc
     const tags = record(properties.tag_counts);
     const details = tags ? Object.entries(tags).filter(([, total]) => (count(total) ?? 0) > 0).map(([tag]) => tag) : [];
     patches.push({
-      id: `project-sidewalk-seattle:${sourceId}`,
+      id: `${dataset.id}:${sourceId}`,
       type: "Feature",
       geometry: { type: "Point", coordinates: [coordinates[0], coordinates[1]] },
       properties: {
+        regionId: dataset.regionId,
         title: `${barrier.title} (Project Sidewalk)`,
         category: barrier.category,
         severity: source?.medianSeverity === 3 ? "difficult" : "caution",

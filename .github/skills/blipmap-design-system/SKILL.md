@@ -26,6 +26,10 @@ NOT: children's software, pastel SaaS dashboard, glassmorphism, neon cyberpunk, 
 
 ## CSS Token Reference
 
+Defined in [src/styles/tokens.css](../../../src/styles/tokens.css). Light values shown; a
+`@media (prefers-color-scheme: dark)` block overrides the color tokens with a dark palette that
+keeps the same relationships (surfaces stay warm/neutral, moss stays the one accent).
+
 ```css
 :root {
   /* Text */
@@ -39,19 +43,66 @@ NOT: children's software, pastel SaaS dashboard, glassmorphism, neon cyberpunk, 
 
   /* Accents */
   --moss: #4a7c59;          /* primary accent — leaf/moss green */
+  --moss-strong: #3d6b4c;   /* hover/pressed state for moss-filled controls */
   --warning: #d4732a;       /* caution — coral/orange */
   --danger: #c0392b;        /* difficult / destructive */
+  --route: #3b7dd8;         /* route line + "start" pin on the map */
+  --on-accent: #ffffff;     /* text placed on an accent fill — flips per theme for AA contrast */
+
+  /* Status tints (pills, ratings, banners) */
+  --status-easy-bg: #d4edda;      --status-easy-fg: #1a5c2e;
+  --status-caution-bg: #fde8d0;   --status-caution-fg: #8a4910;
+  --status-difficult-bg: #fad5d3; --status-difficult-fg: #7a1e1a;
+  --status-observed-bg: #e8f4fd;  --status-observed-fg: #1a4a6b;
+
+  /* Overlay / scrim */
+  --overlay: rgb(0 0 0 / 32%);         /* modal-overlay backdrop */
+  --dialog-backdrop: rgb(0 0 0 / 35%); /* native <dialog>::backdrop */
 
   /* Shape */
   --radius-sm: 4px;
   --radius-md: 8px;
 
+  /* Spacing scale (2px base, used for gaps/padding on new components) */
+  --space-1: 2px; --space-2: 4px; --space-3: 6px; --space-4: 8px; --space-5: 10px;
+  --space-6: 12px; --space-7: 16px; --space-8: 20px; --space-9: 24px;
+
   /* Elevation */
   --shadow-float: 0 2px 12px rgba(0, 0, 0, 0.12);
+
+  /* Layering — use these instead of ad-hoc z-index numbers */
+  --z-panel: 10;       /* records panel */
+  --z-tool-panel: 15;  /* measure / path-check floating panel */
+  --z-chrome: 20;       /* header, toolbar, route panel */
+  --z-form: 30;         /* patch form, profile drawer */
+  --z-suggestions: 40; /* autocomplete lists */
+  --z-toast: 50;
+  --z-modal: 100;
+
+  /* Motion */
+  --motion-fast: 100ms;
+  --motion-base: 150ms;
+  --motion-easing: ease;
 }
 ```
 
-Always reference tokens. Never hardcode color values.
+Always reference tokens. Never hardcode color values. Lit components keep a hardcoded fallback in
+`var(--token, #hex)` form only because shadow DOM styles can render before `tokens.css` is parsed —
+the fallback must match the light-mode token value, and the real value still comes from the token.
+
+### Dark mode, reduced motion, and contrast
+
+- Dark mode responds automatically to `prefers-color-scheme: dark` — there is no in-app toggle yet.
+  Any new component must read color through tokens (never assume light-mode hex) so it adapts for free.
+- `prefers-reduced-motion: reduce` is handled globally in `global.css` (collapses all
+  transitions/animations) and individually inside each Lit component's `static styles` (shadow DOM
+  doesn't inherit the global rule).
+- `prefers-contrast: more` strengthens `--line` so borders stay visible.
+- MapLibre paint properties and marker DOM elements can't read CSS custom properties directly.
+  `<curb-map>` resolves theme colors at runtime via `getComputedStyle` and repaints on
+  `prefers-color-scheme` change — see `_applyThemePaint` in
+  [curb-map.ts](../../../src/components/web/curb-map.ts). Any new map layer/marker color must go
+  through that same resolution path, not a literal hex value.
 
 ## Severity Color Mapping
 

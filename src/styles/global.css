@@ -25,10 +25,23 @@ body {
 /* ── App layout ────────────────────────────────────── */
 .app {
   --app-header-height: 56px;
+  /* Toolbar left offset + width + a gap; floating panels stay clear of it */
+  --toolbar-clearance: 82px;
+  --records-panel-width: 300px;
+  --mobile-toolbar-height: calc(74px + env(safe-area-inset-bottom, 0px));
   position: relative;
   width: 100%;
   height: 100%;
   padding-top: var(--app-header-height);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* ── Brand ─────────────────────────────────────────── */
@@ -36,7 +49,7 @@ body {
   position: fixed;
   inset: 0 0 auto;
   height: var(--app-header-height);
-  z-index: 20;
+  z-index: var(--z-chrome);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -72,9 +85,12 @@ body {
 .toolbar {
   position: fixed;
   left: 12px;
-  top: 50%;
+  top: calc(50% + var(--app-header-height) / 2);
   transform: translateY(-50%);
-  z-index: 20;
+  max-height: calc(100dvh - var(--app-header-height) - 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  z-index: var(--z-chrome);
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -85,10 +101,13 @@ body {
 }
 
 .toolbar__divider {
+  flex-shrink: 0;
   height: 1px;
   background: var(--line);
   margin: 4px 0;
 }
+
+.toolbar > curb-tool-button { flex-shrink: 0; }
 
 /* ── Records panel ──────────────────────────────────── */
 .records-panel {
@@ -101,7 +120,7 @@ body {
   border-left: 1px solid var(--line);
   display: flex;
   flex-direction: column;
-  z-index: 10;
+  z-index: var(--z-panel);
   overflow: hidden;
 }
 
@@ -112,12 +131,15 @@ body {
     left: 0; top: auto; bottom: 0;
     transform: none;
     width: 100%;
+    height: var(--mobile-toolbar-height);
+    max-height: none;
     flex-direction: row;
-    justify-content: space-around;
+    justify-content: flex-start;
     border-radius: var(--radius-md) var(--radius-md) 0 0;
-    padding: 6px 4px env(safe-area-inset-bottom, 0);
-    gap: 0;
+    padding: 6px 6px env(safe-area-inset-bottom, 0);
+    gap: 2px;
     overflow-x: auto;
+    overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
   }
 
@@ -129,37 +151,35 @@ body {
   /* Records panel becomes a bottom sheet */
   .records-panel {
     right: 0; left: 0; top: auto;
-    bottom: 60px;   /* clear mobile toolbar */
+    bottom: var(--mobile-toolbar-height);
     width: 100%;
-    height: 44vh;
+    height: min(56dvh, calc(100dvh - var(--app-header-height) - var(--mobile-toolbar-height) - 16px));
     border-left: none;
     border-top: 1px solid var(--line);
     border-radius: var(--radius-md) var(--radius-md) 0 0;
   }
 
-  /* Floating tool panels shift to clear toolbar */
-  .tool-panel {
-    bottom: 74px;
-    left: 8px;
-    right: 8px;
-    width: auto;
-    max-width: 100%;
-  }
-
   /* Patch form uses a sheet anchored above the toolbar */
   .patch-form-panel {
-    bottom: 60px;
+    bottom: var(--mobile-toolbar-height);
     left: 0;
     right: 0;
     width: 100%;
-    max-height: 70vh;
+    max-height: calc(100dvh - var(--app-header-height) - var(--mobile-toolbar-height));
     overflow-y: auto;
+    padding: var(--space-6) var(--space-6) calc(var(--space-9) + env(safe-area-inset-bottom, 0px));
     border-radius: var(--radius-md) var(--radius-md) 0 0;
     box-shadow: 0 -4px 24px rgba(0,0,0,0.14);
   }
 
-  .app-header { padding-inline: 8px; gap: 8px; }
-  .account-navigation .btn { padding-inline: 10px; }
+  .app-header {
+    --app-header-height: 56px;
+    height: var(--app-header-height);
+    padding-inline: 10px;
+    gap: 8px;
+  }
+  .brand__name { font-size: 0.85rem; }
+  .account-navigation .btn { min-height: 44px; padding-inline: 9px; }
 }
 
 .records-panel__header {
@@ -226,8 +246,34 @@ body {
   outline-offset: -1px;
 }
 
+.records-panel__route-nudge {
+  padding: 8px 16px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--moss) 8%, transparent);
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.records-panel__route-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--moss);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.records-panel__route-link:hover { color: var(--moss-strong); }
+.records-panel__route-link:focus-visible { outline: 2px solid var(--moss); outline-offset: 2px; border-radius: var(--radius-sm); }
+
 .records-panel__list {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 8px;
   display: flex;
@@ -277,16 +323,57 @@ body {
 
 /* ── Floating tool panels ───────────────────────────── */
 .tool-panel {
-  position: fixed;
-  bottom: 28px;
-  left: 72px;
-  z-index: 15;
   background: var(--paper-raised);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-float);
   padding: 14px 16px;
-  min-width: 240px;
-  max-width: 320px;
+  min-width: 0;
+}
+
+.context-panel {
+  position: fixed;
+  inset: var(--app-header-height) 0 0 auto;
+  width: min(360px, calc(100% - var(--toolbar-clearance)));
+  z-index: var(--z-panel);
+  background: var(--paper-raised);
+  border-left: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.context-panel__header { padding: var(--space-7); border-bottom: 1px solid var(--line); flex-shrink: 0; max-height: 75%; overflow-y: auto; }
+.context-panel__header h2 { font-size: 1rem; margin-bottom: var(--space-6); letter-spacing: 0; }
+.context-panel__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+.context-panel__actions .btn { min-height: 44px; display: flex; align-items: center; justify-content: center; gap: var(--space-3); white-space: normal; }
+.context-panel__primary { grid-column: 1 / -1; }
+.context-panel__body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.context-panel__summary { padding: var(--space-6) var(--space-7); color: var(--muted); font-size: 0.85rem; }
+.context-panel__list { display: grid; gap: var(--space-4); padding: 0 var(--space-6) var(--space-6); }
+.panel-icon { display: inline-flex; flex-shrink: 0; }
+.panel-icon svg { width: 18px; height: 18px; }
+@media (max-width: 600px) {
+  .context-panel {
+    inset: auto 0 var(--mobile-toolbar-height);
+    width: 100%;
+    height: min(46dvh, calc(100dvh - var(--app-header-height) - var(--mobile-toolbar-height) - 16px));
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+  }
+  /* Expand to full height only once there's genuinely tall content (a route
+     result/error) to scroll \u2014 otherwise keep the map, and its clickable
+     clusters/markers, reachable underneath the sheet. */
+  .context-panel--expanded {
+    inset: var(--app-header-height) 0 var(--mobile-toolbar-height);
+    height: auto;
+  }
+  .context-panel__header { padding: var(--space-5) var(--space-6); }
+  .context-panel__header h2 { margin-bottom: var(--space-4); }
+}
+
+@media (max-height: 600px) {
+  .records-panel { overflow-y: auto; overscroll-behavior: contain; }
+  .records-panel__list { flex: 0 0 auto; overflow: visible; }
+  .records-panel__footer { max-height: none; overflow: visible; }
 }
 
 .tool-panel__title {
@@ -320,13 +407,13 @@ body {
 .patch-form-panel {
   position: fixed;
   bottom: 28px;
-  left: 72px;
-  z-index: 30;
+  left: var(--toolbar-clearance);
+  z-index: var(--z-form);
   background: var(--paper-raised);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-float);
   padding: 16px;
-  width: 300px;
+  width: min(300px, calc(100vw - var(--toolbar-clearance) - var(--space-7)));
 }
 
 .patch-form-panel__header {
@@ -425,9 +512,9 @@ body {
   margin-bottom: 10px;
 }
 
-.path-check-rating.clear    { background: #d4edda; color: #1a5c2e; }
-.path-check-rating.caution  { background: #fde8d0; color: #8a4910; }
-.path-check-rating.difficult { background: #fad5d3; color: #7a1e1a; }
+.path-check-rating.clear    { background: var(--status-easy-bg); color: var(--status-easy-fg); }
+.path-check-rating.caution  { background: var(--status-caution-bg); color: var(--status-caution-fg); }
+.path-check-rating.difficult { background: var(--status-difficult-bg); color: var(--status-difficult-fg); }
 
 .path-check-list {
   list-style: none;
@@ -435,11 +522,12 @@ body {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-height: 140px;
-  overflow-y: auto;
 }
 
 .path-check-list__item {
+  width: 100%;
+  min-height: 44px;
+  overflow-wrap: anywhere;
   font-size: 0.8rem;
   padding: 4px 8px;
   background: var(--paper);
@@ -468,16 +556,8 @@ body {
 
 /* ── Route planner panel ────────────────────────────── */
 .route-panel {
-  position: fixed;
-  right: 308px;   /* just left of records panel */
-  top: calc(var(--app-header-height) + 12px);
-  z-index: 20;
-  width: 320px;
-  max-height: calc(100dvh - var(--app-header-height) - 24px);
-  overflow-y: auto;
+  width: 100%;
   background: var(--paper-raised);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-float);
   padding: 16px;
   display: flex;
   flex-direction: column;
@@ -522,13 +602,23 @@ body {
 .route-panel__field input:focus { outline: 2px solid var(--moss); outline-offset: -1px; }
 
 .route-panel__autocomplete { position: relative; }
+.address-search__input { display: grid; grid-template-columns: minmax(0, 1fr) 44px; gap: var(--space-4); }
+.address-search__input input { min-width: 0; width: 100%; min-height: 44px; }
+.address-search__input .btn { padding: 0; display: grid; place-items: center; }
+.address-search__results { display: grid; max-height: 220px; overflow-y: auto; border: 1px solid var(--line); }
+.address-search__results button { min-height: 44px; padding: var(--space-6); border: 0; border-bottom: 1px solid var(--line); background: var(--paper); color: var(--ink); text-align: left; font: inherit; font-size: 0.8rem; overflow-wrap: anywhere; cursor: pointer; }
+.address-search__results button:hover { background: var(--line); }
+.address-search__results button:focus-visible { outline: 2px solid var(--moss); outline-offset: -2px; }
+.address-search__status { font-size: 0.8rem; color: var(--muted); overflow-wrap: anywhere; }
+.route-panel__field select { min-height: 44px; width: 100%; background: var(--paper); color: var(--ink); border: 1px solid var(--line); padding: var(--space-4); font: inherit; }
+.records-panel__footer > .btn { display: block; width: 100%; min-height: 44px; margin-bottom: var(--space-4); }
 
 .route-panel__suggestions {
   position: absolute;
   top: 100%;
   left: 0;
   right: 0;
-  z-index: 40;
+  z-index: var(--z-suggestions);
   background: var(--paper-raised);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
@@ -560,16 +650,16 @@ body {
 
 .route-panel__error {
   font-size: 0.8rem;
-  color: var(--danger);
-  background: #fad5d3;
+  color: var(--status-difficult-fg);
+  background: var(--status-difficult-bg);
   border-radius: var(--radius-sm);
   padding: 8px 10px;
 }
 
 .route-panel__warning {
   font-size: 0.78rem;
-  color: var(--warning);
-  background: #fde8d0;
+  color: var(--status-caution-fg);
+  background: var(--status-caution-bg);
   border-radius: var(--radius-sm);
   padding: 8px 10px;
 }
@@ -593,9 +683,9 @@ body {
 
 .route-panel__accessibility strong { display: block; margin-bottom: 4px; }
 
-.route-panel__accessibility--clear    { background: #d4edda; color: #1a5c2e; }
-.route-panel__accessibility--caution  { background: #fde8d0; color: #8a4910; }
-.route-panel__accessibility--difficult { background: #fad5d3; color: #7a1e1a; }
+.route-panel__accessibility--clear    { background: var(--status-easy-bg); color: var(--status-easy-fg); }
+.route-panel__accessibility--caution  { background: var(--status-caution-bg); color: var(--status-caution-fg); }
+.route-panel__accessibility--difficult { background: var(--status-difficult-bg); color: var(--status-difficult-fg); }
 
 .route-panel__accessibility ul { list-style: none; margin-top: 6px; display: flex; flex-direction: column; gap: 4px; }
 .route-panel__accessibility li { display: flex; align-items: baseline; gap: 6px; }
@@ -646,10 +736,10 @@ body {
 /* ── Mobility profile drawer ────────────────────────── */
 .profile-drawer {
   position: fixed;
-  right: 308px;
+  left: var(--toolbar-clearance);
   top: 12px;
-  z-index: 30;
-  width: 300px;
+  z-index: var(--z-form);
+  width: min(300px, calc(100vw - var(--toolbar-clearance) - var(--records-panel-width) - var(--space-9)));
   max-height: calc(100vh - 24px);
   overflow-y: auto;
   background: var(--paper-raised);
@@ -699,13 +789,16 @@ body {
   flex-shrink: 0;
 }
 
+/* Matches the toolbar's own breakpoint below — the fluid clamp() width above
+   already keeps these panels clear of the toolbar for every wider viewport,
+   so this only needs to fire once the toolbar becomes a bottom strip too. */
 @media (max-width: 600px) {
-  .route-panel,
   .profile-drawer {
     right: 0; left: 0; top: auto;
-    bottom: 60px;
+    bottom: var(--mobile-toolbar-height);
     width: 100%;
-    max-height: 75vh;
+    max-height: calc(100dvh - var(--app-header-height) - var(--mobile-toolbar-height));
+    padding: var(--space-6) var(--space-6) calc(var(--space-9) + env(safe-area-inset-bottom, 0px));
     border-radius: var(--radius-md) var(--radius-md) 0 0;
   }
 }
@@ -733,7 +826,7 @@ body {
   border: 1px solid var(--line);
   color: var(--ink);
 }
-.account-dialog::backdrop { background: var(--dialog-backdrop, rgb(0 0 0 / 35%)); }
+.account-dialog::backdrop { background: var(--dialog-backdrop); }
 .account-dialog:not([open]) { display: none; }
 .account-fields { border: 0; padding: 0; min-width: 0; display: grid; gap: 12px; }
 .account-dialog .form-actions { flex-wrap: wrap; }
@@ -749,15 +842,15 @@ body {
 .btn--primary {
   background: var(--moss);
   border-color: var(--moss);
-  color: #fff;
+  color: var(--on-accent);
 }
 
-.btn--primary:hover { background: #3d6b4c; border-color: #3d6b4c; }
+.btn--primary:hover { background: var(--moss-strong); border-color: var(--moss-strong); }
 
 .btn--danger {
   background: var(--danger);
   border-color: var(--danger);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 /* ── Toast ──────────────────────────────────────────── */
@@ -766,14 +859,14 @@ body {
   bottom: 24px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 50;
+  z-index: var(--z-toast);
   background: var(--ink);
   color: var(--paper);
   padding: 10px 18px;
   border-radius: var(--radius-md);
   font-size: 0.85rem;
   box-shadow: var(--shadow-float);
-  animation: fade-in 150ms ease;
+  animation: fade-in var(--motion-base) var(--motion-easing);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -809,7 +902,7 @@ body {
   overflow-wrap: anywhere;
 }
 
-.patch-details::backdrop { background: color-mix(in srgb, var(--ink) 40%, transparent); }
+.patch-details::backdrop { background: var(--dialog-backdrop); }
 .patch-details__header { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 20px; }
 .patch-details h2 { flex: 1; min-width: 0; font-size: 1.1rem; line-height: 1.4; }
 .patch-details h2:focus-visible { outline: 2px solid var(--moss); outline-offset: 3px; }
@@ -894,12 +987,14 @@ body {
 .form-photo__remove:hover { color: var(--danger); }
 
 /* ── Toast action button ────────────────────────────── */
+/* Toast bg/fg are inverted (--ink/--paper), so the action button must
+   tint toward --paper too — a literal white breaks in dark mode. */
 .toast__action {
   padding: 3px 10px;
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(255,255,255,0.4);
-  background: rgba(255,255,255,0.15);
-  color: #fff;
+  border: 1px solid color-mix(in srgb, var(--paper) 40%, transparent);
+  background: color-mix(in srgb, var(--paper) 15%, transparent);
+  color: var(--paper);
   font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
@@ -908,14 +1003,14 @@ body {
   flex-shrink: 0;
 }
 
-.toast__action:hover { background: rgba(255,255,255,0.28); }
+.toast__action:hover { background: color-mix(in srgb, var(--paper) 28%, transparent); }
 
 /* ── Modal overlay ──────────────────────────────────── */
 .modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 100;
-  background: rgba(0,0,0,0.32);
+  z-index: var(--z-modal);
+  background: var(--overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -988,6 +1083,75 @@ body {
   font-size: 0.72rem;
   font-weight: 700;
   color: var(--ink);
-  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  box-shadow: var(--shadow-float);
   flex-shrink: 0;
 }
+
+/* Mobile controls are full-width sheets or bottom navigation. Keep content
+   readable and prevent the browser keyboard from hiding the active field. */
+@media (max-width: 600px) {
+  .records-panel__header { padding: var(--space-5) var(--space-6) var(--space-4); }
+  .records-panel__list { padding: var(--space-4) var(--space-5); }
+  .records-panel__footer {
+    padding: var(--space-5) var(--space-6) calc(var(--space-5) + env(safe-area-inset-bottom, 0px));
+    max-height: 30%;
+  }
+  .records-panel__search,
+  .records-panel__sort,
+  .records-panel__filter { min-height: 44px; font-size: 0.82rem; }
+  .records-panel__filters { gap: var(--space-3); }
+  .records-panel__baseline { font-size: 0.78rem; }
+
+  .route-panel {
+    min-height: 100%;
+    padding: var(--space-5) var(--space-6) calc(var(--space-9) + env(safe-area-inset-bottom, 0px));
+    gap: var(--space-6);
+  }
+  .route-panel__actions { flex-wrap: wrap; }
+  .route-panel__actions .btn,
+  .route-panel__print { min-height: 44px; }
+  .route-panel__summary { flex-wrap: wrap; gap: var(--space-5); }
+  .route-panel__suggestions { max-height: min(32dvh, 240px); }
+
+  .patch-details {
+    inset: auto 0 0;
+    width: 100%;
+    max-height: calc(100dvh - var(--app-header-height));
+    padding: var(--space-6) var(--space-6) calc(var(--space-9) + env(safe-area-inset-bottom, 0px));
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+  }
+  .patch-details__metadata { grid-template-columns: minmax(0, 1fr); gap: var(--space-5); }
+  .patch-details__actions { position: sticky; bottom: 0; padding-top: var(--space-5); background: var(--paper-raised); }
+  .patch-details__actions .btn { width: 100%; }
+
+  .toast {
+    bottom: calc(var(--mobile-toolbar-height) + var(--space-5));
+    width: min(calc(100% - var(--space-8)), 30rem);
+    justify-content: space-between;
+    padding: var(--space-5) var(--space-6);
+  }
+}
+/* ── App-level crash fallback ───────────────────────── */
+.app-crash {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: grid;
+  place-items: center;
+  padding: var(--space-8);
+  background: var(--paper);
+}
+
+.app-crash__card {
+  max-width: 28rem;
+  padding: var(--space-9);
+  border-radius: var(--radius-md);
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-float);
+  text-align: center;
+}
+
+.app-crash__card h1 { font-size: 1.1rem; margin-bottom: var(--space-6); }
+.app-crash__card p { color: var(--muted); font-size: 0.85rem; line-height: 1.5; margin-bottom: var(--space-6); }
+.app-crash__detail { font-family: monospace; overflow-wrap: anywhere; color: var(--danger); }

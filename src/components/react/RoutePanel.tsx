@@ -1,15 +1,21 @@
+import { ContextPanel, PanelIcon } from "./ContextPanel";
+import { RotateCcw, X } from "lucide";
 import { useState, useCallback, useRef, useEffect } from "react";
 import type { Patch } from "../../types/patch";
 import type { UserProfile } from "../../data/profile";
 import type { FavoriteLocation } from "../../data/account";
 import type { RouteResult } from "../../gis/routing";
-import { geocodePlace, fetchRoute, formatDuration } from "../../gis/routing";
+import { fetchRoute, formatDuration } from "../../gis/routing";
+import { AddressSearch } from "./AddressSearch";
+import type { SearchArea } from "../../data/geocoding";
+import { DEFAULT_REGION_ID, getDataset, REGIONS, UNASSIGNED_REGION_ID, type RegionConfig } from "../../config/regions";
 import { formatRouteStep } from "../../gis/routeDirections";
 import { runPathCheck } from "../../gis/pathCheck";
 import { formatDistance } from "../../gis/measure";
 import { ORS_API_KEY } from "../../config/routing";
 
 interface RoutePanelProps {
+  region: RegionConfig;
   patches: Patch[];
   profile: UserProfile;
   favorites?: FavoriteLocation[];
@@ -25,11 +31,10 @@ interface Suggestion { label: string; lng: number; lat: number; }
 
 const imageryNotice = "Project Sidewalk reports are based on external imagery. Source images are not imported or attached.";
 
-export function RoutePanel({ patches, profile, favorites = [], onSaveFavorite, onRouteReady, onClear, onClose, onOpenProfile, onSelectPatch }: RoutePanelProps) {
+export function RoutePanel({ region, patches, profile, favorites = [], onSaveFavorite, onRouteReady, onClear, onClose, onOpenProfile, onSelectPatch }: RoutePanelProps) {
   const [fromText, setFromText] = useState("");
   const [toText, setToText]   = useState("");
-  const [fromSugs, setFromSugs] = useState<Suggestion[]>([]);
-  const [toSugs, setToSugs]     = useState<Suggestion[]>([]);
+  const [searchArea, setSearchArea] = useState<SearchArea>(region.id === UNASSIGNED_REGION_ID ? DEFAULT_REGION_ID : region.id);
   const [fromPlace, setFromPlace] = useState<Suggestion | null>(null);
   const [toPlace, setToPlace]     = useState<Suggestion | null>(null);
   const [route, setRoute] = useState<RouteResult | null>(null);
@@ -39,8 +44,6 @@ export function RoutePanel({ patches, profile, favorites = [], onSaveFavorite, o
   const [savingFavorite, setSavingFavorite] = useState(false);
   const [favoriteMessage, setFavoriteMessage] = useState("");
 
-  const fromTimer = useRef<ReturnType<typeof setTimeout>>();
-  const toTimer   = useRef<ReturnType<typeof setTimeout>>();
   const routeRequest = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -56,21 +59,6 @@ export function RoutePanel({ patches, profile, favorites = [], onSaveFavorite, o
     };
   }, [fromPlace, toPlace, profile, onClear]);
 
-  useEffect(() => () => {
-    clearTimeout(fromTimer.current);
-    clearTimeout(toTimer.current);
-  }, []);
-
-  const suggest = useCallback((text: string, timer: React.MutableRefObject<ReturnType<typeof setTimeout> | undefined>, setSugs: (s: Suggestion[]) => void) => {
-    clearTimeout(timer.current);
-    if (text.length < 3) { setSugs([]); return; }
-    timer.current = setTimeout(async () => {
-      try {
-        setSugs(await geocodePlace(text));
-      } catch { setSugs([]); }
-    }, 420);
-  }, []);
-
   const buildRoute = useCallback(async () => {
     if (!fromPlace || !toPlace) return;
     routeRequest.current?.abort();
@@ -81,6 +69,7 @@ export function RoutePanel({ patches, profile, favorites = [], onSaveFavorite, o
     setRoute(null);
     onClear();
     try {
+      if (!region.routingModes.includes(profile.routingProfile)) throw new Error("This travel mode is not configured for the selected region.");
       const result = await fetchRoute(
         [fromPlace.lng, fromPlace.lat],
         [toPlace.lng, toPlace.lat],
@@ -98,7 +87,7 @@ export function RoutePanel({ patches, profile, favorites = [], onSaveFavorite, o
     } finally {
       if (routeRequest.current === request) setLoading(false);
     }
-  }, [fromPlace, toPlace, profile, onRouteReady, onClear]);
+  }, [fromPlace, toPlace, profile, onRouteReady, onClear, region]);
 
   const handleClear = useCallback(() => {
     setFromText(""); setToText("");
@@ -143,17 +132,19 @@ export function RoutePanel({ patches, profile, favorites = [], onSaveFavorite, o
   const patchWarning = route
     ? runPathCheck(route.coordinates, patches)
     : null;
-  const hasImageryReports = patchWarning?.nearby.some(patch => patch.properties.source?.provider === "project-sidewalk-seattle");
+  const hasImageryReports = patchWarning?.nearby.some(patch => getDataset(patch.properties.source?.provider ?? "")?.adapter === "project-sidewalk");
 
   const noKey = !ORS_API_KEY;
 
   return (
-    <div className="route-panel" role="complementary" aria-label="Route planner">
+    <ContextPanel title="Route planner" expanded={!!route || !!error} actions={<>
+      <button className="btn" onClick={handleClear}><PanelIcon icon={RotateCcw} />Clear route</button>
+      <button className="btn" onClick={onClose} aria-label="Close route planner"><PanelIcon icon={X} />Exit planner</button>
+    </>}><div className="route-panel">
       <div className="route-panel__header">
         <h2 className="route-panel__title">Route</h2>
         <div className="route-panel__header-actions">
           <button className="btn" onClick={onOpenProfile} title="Mobility settings">⚙</button>
-          <button className="btn" onClick={onClose} aria-label="Close route planner">✕</button>
         </div>
       </div>
 
@@ -171,79 +162,35 @@ export function RoutePanel({ patches, profile, favorites = [], onSaveFavorite, o
         <label htmlFor="favorite-destination">Saved destination</label>
         <select id="favorite-destination" value="" onChange={event => {
           const favorite = favorites.find(place => place.id === event.target.value);
-          if (favorite) { setToPlace(favorite); setToText(favorite.label); setToSugs([]); }
+          if (favorite) { setToPlace(favorite); setToText(favorite.label); }
         }}>
           <option value="">Choose a favorite</option>
           {favorites.map(favorite => <option key={favorite.id} value={favorite.id}>{favorite.label}</option>)}
         </select>
       </div>}
 
-      {/* From */}
       <div className="route-panel__field">
-        <label htmlFor="route-from">From</label>
-        <div className="route-panel__autocomplete">
-          <input
-            id="route-from"
-            type="search"
-            autoComplete="off"
-            placeholder="Start address or place…"
-            value={fromText}
-            onChange={(e) => {
-              setFromText(e.target.value);
-              setFromPlace(null);
-              suggest(e.target.value, fromTimer, setFromSugs);
-            }}
-          />
-          {fromSugs.length > 0 && (
-            <ul className="route-panel__suggestions" role="listbox">
-              {fromSugs.slice(0, 4).map((s, i) => (
-                <li key={i} role="option" aria-selected={false}
-                  onMouseDown={() => { setFromPlace(s); setFromText(s.label); setFromSugs([]); }}>
-                  {s.label}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-        {fromPlace && <p className="route-panel__coords">{fromPlace.lat.toFixed(4)}, {fromPlace.lng.toFixed(4)}</p>}
+        <label htmlFor="route-search-area">Search area</label>
+        <select id="route-search-area" value={searchArea} onChange={event => setSearchArea(event.target.value as SearchArea)}>
+          {REGIONS.filter(candidate => candidate.id !== UNASSIGNED_REGION_ID).map(candidate =>
+            <option key={candidate.id} value={candidate.id}>{candidate.name} area</option>)}
+        </select>
       </div>
-
-      {/* To */}
-      <div className="route-panel__field">
-        <label htmlFor="route-to">To</label>
-        <div className="route-panel__autocomplete">
-          <input
-            id="route-to"
-            type="search"
-            autoComplete="off"
-            placeholder="End address or place…"
-            value={toText}
-            onChange={(e) => {
-              setToText(e.target.value);
-              setToPlace(null);
-              suggest(e.target.value, toTimer, setToSugs);
-            }}
-          />
-          {toSugs.length > 0 && (
-            <ul className="route-panel__suggestions" role="listbox">
-              {toSugs.slice(0, 4).map((s, i) => (
-                <li key={i} role="option" aria-selected={false}
-                  onMouseDown={() => { setToPlace(s); setToText(s.label); setToSugs([]); }}>
-                  {s.label}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-        {toPlace && <p className="route-panel__coords">{toPlace.lat.toFixed(4)}, {toPlace.lng.toFixed(4)}</p>}
-      </div>
+      <AddressSearch id="route-from" label="From" value={fromText} area={searchArea}
+        onChange={text => { setFromText(text); setFromPlace(null); }}
+        onSelect={place => { setFromText(place.label); setFromPlace(place); }} />
+      {fromPlace && <p className="route-panel__coords">{fromPlace.lat.toFixed(4)}, {fromPlace.lng.toFixed(4)}</p>}
+      <AddressSearch id="route-to" label="To" value={toText} area={searchArea}
+        onChange={text => { setToText(text); setToPlace(null); }}
+        onSelect={place => { setToText(place.label); setToPlace(place); }} />
+      {toPlace && <p className="route-panel__coords">{toPlace.lat.toFixed(4)}, {toPlace.lng.toFixed(4)}</p>}
+      <p className="address-search__status">Address data: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a></p>
 
       <div className="route-panel__actions">
         <button className="btn btn--primary" onClick={buildRoute}
           disabled={!fromPlace || !toPlace || loading || noKey}>
           {loading ? "Routing…" : "Get route"}
         </button>
-        <button className="btn" onClick={handleClear}>Clear</button>
       </div>
       {onSaveFavorite && toPlace && <button className="btn" disabled={savingFavorite} onClick={async () => {
         setSavingFavorite(true); setFavoriteMessage("");
@@ -307,6 +254,6 @@ export function RoutePanel({ patches, profile, favorites = [], onSaveFavorite, o
           <button className="btn route-panel__print" onClick={handlePrint}>🖨 Print directions</button>
         </div>
       )}
-    </div>
+    </div></ContextPanel>
   );
 }

@@ -14,7 +14,7 @@ export type PatchSeverity = "easy" | "caution" | "difficult";
 export type PatchStatus = "observed" | "verified" | "resolved";
 
 export interface PatchSource {
-  provider: "project-sidewalk-seattle";
+  provider: string;
   sourceId: string;
   labelType: string;
   importedAt: string;
@@ -35,6 +35,7 @@ export interface Patch {
     coordinates: [number, number];
   };
   properties: {
+    regionId?: string;
     title: string;
     category: PatchCategory;
     severity: PatchSeverity;

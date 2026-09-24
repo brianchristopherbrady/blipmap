@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { CurbRecordCard } from "./CurbRecordCard";
-import { SEATTLE_SOURCE_URL } from "../../gis/seattleBaseline";
+import { REGIONS, type RegionConfig } from "../../config/regions";
 import type { Patch, PatchCategory, PatchSeverity, PatchStatus } from "../../types/patch";
 import { CATEGORY_LABELS, SEVERITY_LABELS, STATUS_LABELS, VALID_CATEGORIES, VALID_SEVERITIES, VALID_STATUSES } from "../../types/patch";
 
@@ -15,6 +15,8 @@ export interface Filters {
 }
 
 interface RecordsPanelProps {
+  region: RegionConfig;
+  onRegionChange: (id: string) => void;
   patches: Patch[];
   allPatchCount: number;
   selectedId: string | null;
@@ -24,13 +26,17 @@ interface RecordsPanelProps {
   onEdit: (patch: Patch) => void;
   onDelete: (id: string) => void;
   onClearSeed: () => void;
+  onRestore: () => void;
+  storageBusy: boolean;
   baselineLoading: boolean;
   baselineMessage: string;
+  onPlanRoute: () => void;
 }
 
 export function RecordsPanel({
+  region, onRegionChange,
   patches, allPatchCount, selectedId, filters, onFiltersChange, onSelect, onEdit, onDelete, onClearSeed,
-  baselineLoading, baselineMessage,
+  baselineLoading, baselineMessage, onRestore, storageBusy, onPlanRoute,
 }: RecordsPanelProps) {
   const update = useCallback((key: keyof Filters, value: string) => {
     onFiltersChange({ ...filters, [key]: value });
@@ -52,6 +58,10 @@ export function RecordsPanel({
           aria-label="Search patches"
         />
         <div className="records-panel__filters">
+          <select className="records-panel__sort" aria-label="Region" value={region.id} disabled={storageBusy}
+            onChange={event => onRegionChange(event.target.value)}>
+            {REGIONS.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}
+          </select>
           <select
             className="records-panel__sort"
             value={filters.sort}
@@ -102,11 +112,15 @@ export function RecordsPanel({
         </div>
       </div>
 
+      <p className="records-panel__route-nudge">
+        Checking a specific trip? <button type="button" className="records-panel__route-link" onClick={onPlanRoute}>Plan a route</button> to see barriers along the way.
+      </p>
+
       <div className="records-panel__list" role="list">
         {patches.length === 0 ? (
           <p className="records-panel__empty">
             {allPatchCount === 0
-              ? (baselineLoading ? "Loading Seattle observations..." : "No observations available on this device.")
+              ? (baselineLoading ? `Loading ${region.name} observations...` : "No observations available on this device.")
               : "No patches match your filters."}
           </p>
         ) : (
@@ -139,10 +153,15 @@ export function RecordsPanel({
 
       <div className="records-panel__footer">
         <div className="records-panel__baseline">
-          <p>Downtown Seattle · <a href={SEATTLE_SOURCE_URL} target="_blank" rel="noopener noreferrer">Project Sidewalk</a> (CC0)</p>
+          {region.sources.filter(source => source.informationUrl && source.license).map(source => <p key={source.id}>
+            {source.coverage} · <a href={source.informationUrl!} target="_blank" rel="noopener noreferrer">{source.attribution}</a> ({source.license!.id})
+          </p>)}
           <p role="status" aria-live="polite" aria-atomic="true">{baselineMessage}</p>
         </div>
-        <button className="records-panel__clear" onClick={onClearSeed} disabled={baselineLoading}>
+        <button className="btn" onClick={onRestore} disabled={baselineLoading || storageBusy}>
+          Restore patches
+        </button>
+        <button className="records-panel__clear" onClick={onClearSeed} disabled={baselineLoading || storageBusy || allPatchCount === 0}>
           Clear all patches
         </button>
       </div>

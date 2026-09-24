@@ -1,7 +1,7 @@
 import type { Patch } from "../types/patch";
 import { getMeta } from "./db";
+import { getDataset, withinBounds } from "../config/regions";
 
-const ORIGIN = "https://sidewalk-sea.cs.washington.edu";
 const MAX_BYTES = 256 * 1024;
 const TIMEOUT_MS = 8000;
 const LABEL_TYPES = ["NoCurbRamp", "Obstacle", "SurfaceProblem", "NoSidewalk"];
@@ -44,9 +44,11 @@ async function boundedJSON(response: Response): Promise<unknown> {
 
 export async function resolveSidewalkReports(patch: Patch, signal: AbortSignal): Promise<SidewalkReports | null> {
   const source = patch.properties.source;
-  if (signal.aborted || source?.provider !== "project-sidewalk-seattle"
+  const dataset = getDataset(source?.provider ?? "");
+  if (signal.aborted || !source || dataset?.adapter !== "project-sidewalk" || !dataset.endpoint || !dataset.validationBounds
     || !/^\d+$/.test(source.sourceId) || !Number.isSafeInteger(Number(source.sourceId))
     || !LABEL_TYPES.includes(source.labelType)) return null;
+  const origin = new URL(dataset.endpoint).origin;
   const controller = new AbortController();
   let stop: () => void = () => undefined;
   const aborted = new Promise<null>(resolve => {
@@ -55,7 +57,7 @@ export async function resolveSidewalkReports(patch: Patch, signal: AbortSignal):
   signal.addEventListener("abort", stop, { once: true });
   const timeout = setTimeout(stop, TIMEOUT_MS);
   const load = async (): Promise<SidewalkReports | null> => {
-    const snapshot = await getMeta("seattle:sourceSnapshot");
+    const snapshot = await getMeta(`${dataset.storageKey}:sourceSnapshot`);
     const original = Array.isArray(snapshot) ? snapshot.find(value => {
       const entry = record(value);
       const entrySource = record(record(entry?.properties)?.source);
@@ -66,9 +68,9 @@ export async function resolveSidewalkReports(patch: Patch, signal: AbortSignal):
     if (!Array.isArray(coordinates) || coordinates.length !== 2
       || !coordinates.every(value => typeof value === "number" && Number.isFinite(value))) return null;
     const [longitude, latitude] = coordinates as number[];
-    if (longitude < -122.459 || longitude > -122.224 || latitude < 47.481 || latitude > 47.735
+    if (!withinBounds([longitude, latitude], dataset.validationBounds!)
       || controller.signal.aborted) return null;
-    const url = new URL("/v3/api/labelClusters", ORIGIN);
+    const url = new URL(dataset.endpoint!);
     url.searchParams.set("filetype", "geojson");
     url.searchParams.set("bbox", [longitude - 0.0001, latitude - 0.0001, longitude + 0.0001, latitude + 0.0001].join(","));
     url.searchParams.set("labelType", source.labelType);
@@ -91,7 +93,7 @@ export async function resolveSidewalkReports(patch: Patch, signal: AbortSignal):
       reports: ids.slice(0, 3).map(labelId => {
         const date = labels.find(label => label?.label_id === labelId)?.image_capture_date;
         return {
-          labelId, reportURL: `${ORIGIN}/label/${labelId}`,
+          labelId, reportURL: `${origin}/label/${labelId}`,
           imageDate: typeof date === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(date) ? date : null,
         };
       }),

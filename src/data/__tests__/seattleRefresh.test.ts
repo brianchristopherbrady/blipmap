@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getMeta, setMeta, syncSeattlePatches } from "../db";
+import { getMeta, setMeta, syncSourcePatches } from "../db";
 import { refreshSeattleBaseline, SEATTLE_REFRESH_MS, SEATTLE_RETRY_MS } from "../seattleBaseline";
 
-vi.mock("../db", () => ({ getMeta: vi.fn(), setMeta: vi.fn(), syncSeattlePatches: vi.fn() }));
+vi.mock("../db", () => ({ getMeta: vi.fn(), setMeta: vi.fn(), syncSourcePatches: vi.fn() }));
 
 const response = { type: "FeatureCollection", features: [{
   type: "Feature", geometry: { type: "Point", coordinates: [-122.335, 47.608] },
@@ -15,7 +15,11 @@ beforeEach(() => {
   metadata = new Map();
   vi.mocked(getMeta).mockImplementation(async key => metadata.get(key));
   vi.mocked(setMeta).mockImplementation(async (key, value) => { metadata.set(key, value); });
-  vi.mocked(syncSeattlePatches).mockImplementation(async (_patches, date) => { metadata.set("seattle:lastSuccess", date); });
+  vi.mocked(syncSourcePatches).mockImplementation(async (_patches, date) => {
+    metadata.set("seattle:lastSuccess", date);
+    return { id: "fixture", regionId: "seattle", sourceId: "project-sidewalk-seattle", importedAt: date, sourceVersion: null,
+      added: 1, modified: 0, unchanged: 0, apparentRemovals: [], duplicates: 0, rejected: 0 };
+  });
   vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => new Response(JSON.stringify(response))));
 });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.clearAllMocks(); });
@@ -26,7 +30,7 @@ describe("automatic Seattle refresh", () => {
     expect(first).toEqual(second);
     expect(first.refreshed).toBe(true);
     expect(fetch).toHaveBeenCalledTimes(1);
-    expect(syncSeattlePatches).toHaveBeenCalledTimes(1);
+    expect(syncSourcePatches).toHaveBeenCalledTimes(1);
   });
   it("uses the cache until the daily refresh deadline, including across calls", async () => {
     await refreshSeattleBaseline();
@@ -52,13 +56,13 @@ describe("automatic Seattle refresh", () => {
     vi.advanceTimersByTime(SEATTLE_RETRY_MS);
     vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ ...response, features: [...response.features, null] })));
     await expect(refreshSeattleBaseline()).rejects.toThrow("invalid records");
-    expect(syncSeattlePatches).not.toHaveBeenCalled();
+    expect(syncSourcePatches).not.toHaveBeenCalled();
   });
 
   it.each([429, 500])("keeps cached data on provider HTTP %s", async status => {
     vi.mocked(fetch).mockResolvedValueOnce(new Response("", { status }));
     await expect(refreshSeattleBaseline()).rejects.toThrow();
-    expect(syncSeattlePatches).not.toHaveBeenCalled();
+    expect(syncSourcePatches).not.toHaveBeenCalled();
     expect(metadata.has("seattle:lastSuccess")).toBe(false);
   });
 

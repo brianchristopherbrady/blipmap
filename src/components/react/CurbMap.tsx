@@ -16,5 +16,6 @@ export const CurbMap = createComponent({
     onPathComplete:  "curb-path-complete",
     onMapCenter:     "curb-map-center",
     onLocateError:   "curb-locate-error",
+    onGroupChange:   "curb-group-change",
   },
 });

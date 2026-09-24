@@ -1,4 +1,6 @@
 :root {
+  color-scheme: light;
+
   /* Text */
   --ink: #2b2b2b;
   --muted: #6b6b6b;
@@ -10,13 +12,102 @@
 
   /* Accents */
   --moss: #4a7c59;
+  --moss-strong: #3d6b4c;
   --warning: #d4732a;
   --danger: #c0392b;
+  --route: #3b7dd8;
+  /* Measure / Path Check drawn line — deliberately more saturated than --route
+     so the in-progress path reads clearly against tiles and other overlays. */
+  --draw: #0060ff;
+  /* Text color placed on top of an accent fill — flips per theme to hold AA contrast */
+  --on-accent: #ffffff;
+
+  /* Status tints — derived from the accent triad, used by pills/badges/ratings */
+  --status-easy-bg: #d4edda;
+  --status-easy-fg: #1a5c2e;
+  --status-caution-bg: #fde8d0;
+  --status-caution-fg: #8a4910;
+  --status-difficult-bg: #fad5d3;
+  --status-difficult-fg: #7a1e1a;
+  --status-observed-bg: #e8f4fd;
+  --status-observed-fg: #1a4a6b;
+
+  /* Overlay / scrim */
+  --overlay: rgb(0 0 0 / 32%);
+  --dialog-backdrop: rgb(0 0 0 / 35%);
 
   /* Shape */
   --radius-sm: 4px;
   --radius-md: 8px;
 
+  /* Spacing scale */
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 10px;
+  --space-6: 12px;
+  --space-7: 16px;
+  --space-8: 20px;
+  --space-9: 24px;
+
   /* Elevation */
   --shadow-float: 0 2px 12px rgba(0, 0, 0, 0.12);
+
+  /* Layering — keep app-wide surfaces on these fixed tiers */
+  --z-panel: 10;
+  --z-tool-panel: 15;
+  --z-chrome: 20;
+  --z-suggestions: 40;
+  --z-form: 30;
+  --z-toast: 50;
+  --z-modal: 100;
+
+  /* Motion */
+  --motion-fast: 100ms;
+  --motion-base: 150ms;
+  --motion-easing: ease;
 }
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --ink: #ece8e0;
+    --muted: #a8a29a;
+
+    --paper: #1c1b18;
+    --paper-raised: #262421;
+    --line: #3a3733;
+
+    --moss: #6fa87e;
+    --moss-strong: #86bd94;
+    --warning: #e08a45;
+    --danger: #de6459;
+    --route: #6ea3e8;
+    --draw: #5b9dff;
+    /* dark-mode accents are light tints, so on-accent text must go dark to stay AA */
+    --on-accent: #14231a;
+
+    --status-easy-bg: #1c3524;
+    --status-easy-fg: #8fd6a2;
+    --status-caution-bg: #3a2a15;
+    --status-caution-fg: #f0b579;
+    --status-difficult-bg: #3a1f1c;
+    --status-difficult-fg: #f0958c;
+    --status-observed-bg: #17293a;
+    --status-observed-fg: #8dc3f0;
+
+    --overlay: rgb(0 0 0 / 55%);
+    --dialog-backdrop: rgb(0 0 0 / 60%);
+
+    --shadow-float: 0 2px 16px rgba(0, 0, 0, 0.45);
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --line: color-mix(in srgb, var(--ink) 45%, var(--paper));
+  }
+}
+

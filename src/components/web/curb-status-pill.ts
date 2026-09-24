@@ -21,11 +21,11 @@ export class CurbStatusPill extends LitElement {
       color: var(--ink, #2b2b2b);
     }
 
-    .pill.easy       { background: #d4edda; color: #1a5c2e; }
-    .pill.caution    { background: #fde8d0; color: #8a4910; }
-    .pill.difficult  { background: #fad5d3; color: #7a1e1a; }
-    .pill.observed   { background: #e8f4fd; color: #1a4a6b; }
-    .pill.verified   { background: #d4edda; color: #1a5c2e; }
+    .pill.easy       { background: var(--status-easy-bg, #d4edda); color: var(--status-easy-fg, #1a5c2e); }
+    .pill.caution    { background: var(--status-caution-bg, #fde8d0); color: var(--status-caution-fg, #8a4910); }
+    .pill.difficult  { background: var(--status-difficult-bg, #fad5d3); color: var(--status-difficult-fg, #7a1e1a); }
+    .pill.observed   { background: var(--status-observed-bg, #e8f4fd); color: var(--status-observed-fg, #1a4a6b); }
+    .pill.verified   { background: var(--status-easy-bg, #d4edda); color: var(--status-easy-fg, #1a5c2e); }
     .pill.resolved   { background: var(--line, #ddd9d0); color: var(--muted, #6b6b6b); }
   `;
 

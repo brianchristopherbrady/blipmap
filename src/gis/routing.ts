@@ -3,12 +3,6 @@ import type { OrsProfileKey } from "../config/routing";
 import { getNonDrivingProfile } from "../config/routing";
 import { routingOptions, type RoutingRequirements } from "../config/accessRequirements";
 
-export interface GeocodedPlace {
-  label: string;
-  lng: number;
-  lat: number;
-}
-
 export interface RouteStep {
   instruction: string;
   distanceM: number;
@@ -24,27 +18,6 @@ export interface RouteResult {
   durationS: number;
   steps: RouteStep[];
   bbox: [number, number, number, number]; // [minLng, minLat, maxLng, maxLat]
-}
-
-/** Nominatim geocoding — no API key required */
-export async function geocodePlace(query: string): Promise<GeocodedPlace[]> {
-  const url = new URL("https://nominatim.openstreetmap.org/search");
-  url.searchParams.set("q", query);
-  url.searchParams.set("format", "jsonv2");
-  url.searchParams.set("limit", "5");
-  url.searchParams.set("addressdetails", "1");
-
-  const res = await fetch(url.toString(), {
-    headers: { "Accept-Language": "en", "User-Agent": "blipmap/1.0" },
-  });
-  if (!res.ok) throw new Error(`Geocoding failed: ${res.statusText}`);
-
-  const data = await res.json() as Array<{ display_name: string; lon: string; lat: string }>;
-  return data.map((r) => ({
-    label: r.display_name,
-    lng: parseFloat(r.lon),
-    lat: parseFloat(r.lat),
-  }));
 }
 
 /** ORS directions — requires VITE_ORS_API_KEY env variable */

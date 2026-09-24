@@ -3,7 +3,6 @@ import type { PathCheckResult } from "../../gis/pathCheck";
 interface PathCheckPanelProps {
   result: PathCheckResult;
   onSelectPatch: (id: string) => void;
-  onClose: () => void;
 }
 
 const RATING_LABELS = {
@@ -12,10 +11,9 @@ const RATING_LABELS = {
   difficult: "Difficult",
 } as const;
 
-export function PathCheckPanel({ result, onSelectPatch, onClose }: PathCheckPanelProps) {
+export function PathCheckPanel({ result, onSelectPatch }: PathCheckPanelProps) {
   return (
     <div className="tool-panel" aria-label="Path Check results" aria-live="polite">
-      <p className="tool-panel__title">Path Check</p>
       <p className="tool-panel__value">{result.distanceLabel}</p>
 
       <span className={`path-check-rating ${result.rating}`} role="status">
@@ -49,9 +47,6 @@ export function PathCheckPanel({ result, onSelectPatch, onClose }: PathCheckPane
         </>
       )}
 
-      <div className="tool-panel__actions" style={{ marginTop: 12 }}>
-        <button className="btn" onClick={onClose}>Close</button>
-      </div>
     </div>
   );
 }

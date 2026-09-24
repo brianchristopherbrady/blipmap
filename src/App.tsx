@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { getPatches, savePatch, updatePatch, deletePatch, clearPatches } from "./data/db";
+import { getPatches, savePatch, updatePatch, deletePatch, clearPatches, restorePatches } from "./data/db";
 import { exportGeoJSON } from "./data/export";
 import { importFromFile } from "./data/import";
-import { refreshSeattleBaseline } from "./data/seattleBaseline";
+import { refreshRegionBaseline } from "./data/regionBaseline";
+import { DEFAULT_REGION_ID, getRegion, patchRegion } from "./config/regions";
 import { measurePath } from "./gis/measure";
-import { runPathCheck, type PathCheckResult } from "./gis/pathCheck";
+import { runPathCheck } from "./gis/pathCheck";
 import type { Patch, MapMode } from "./types/patch";
 import type { Position } from "geojson";
 import { CurbMap, type CurbMapElement } from "./components/react/CurbMap";
@@ -19,12 +20,22 @@ import { RoutePanel } from "./components/react/RoutePanel";
 import { ProfileDrawer } from "./components/react/ProfileDrawer";
 import { useAccountProfile } from "./components/react/useAccountProfile";
 import { AccountDialog } from "./components/react/AccountDialog";
+import { ContextPanel, PanelIcon } from "./components/react/ContextPanel";
+import { ArrowLeft, Check, RotateCcw, X } from "lucide";
+import { CurbRecordCard } from "./components/react/CurbRecordCard";
 import "./styles/tokens.css";
 import "./styles/global.css";
 
 const SEVERITY_RANK: Record<string, number> = { difficult: 0, caution: 1, easy: 2 };
 
 export default function App() {
+  const [regionId, setRegionId] = useState(() => {
+    try { return getRegion(localStorage.getItem("blipmap:region") ?? DEFAULT_REGION_ID).id; }
+    catch { return DEFAULT_REGION_ID; }
+  });
+  const region = getRegion(regionId);
+  const activeRegion = useRef(regionId);
+  activeRegion.current = regionId;
   const [patches, setPatches] = useState<Patch[]>([]);
   const [mode, setMode] = useState<MapMode>("browse");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -33,7 +44,11 @@ export default function App() {
   const [editingPatch, setEditingPatch] = useState<Patch | null>(null);
   const [filters, setFilters] = useState<Filters>({ query: "", category: "", severity: "", status: "", sort: "date-desc" });
   const [measureCoords, setMeasureCoords] = useState<Position[]>([]);
-  const [pathCheckResult, setPathCheckResult] = useState<PathCheckResult | null>(null);
+  const [patchStorageBusy, setPatchStorageBusy] = useState(false);
+  const pathCheckResult = useMemo(() => mode === "path-check" && measureCoords.length >= 2
+    ? runPathCheck(measureCoords, patches) : null, [mode, measureCoords, patches]);
+  const [drawingFinished, setDrawingFinished] = useState(false);
+  const [groupIds, setGroupIds] = useState<string[] | null>(null);
   const [toast, setToast] = useState<{ message: string; action?: { label: string; fn: () => void } } | null>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
@@ -42,7 +57,9 @@ export default function App() {
   const [showAccount, setShowAccount] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [baselineLoading, setBaselineLoading] = useState(false);
-  const [baselineMessage, setBaselineMessage] = useState("Checking Seattle data...");
+  const [baselineMessage, setBaselineMessage] = useState(`Checking ${region.name} data...`);
+  const [mapReady, setMapReady] = useState(false);
+  const autoFitRegionRef = useRef<string | null>(null);
 
   const mapRef = useRef<CurbMapElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -66,14 +83,15 @@ export default function App() {
       checking = true;
       setBaselineLoading(true);
       try {
-        const result = await refreshSeattleBaseline();
-        const cached = await getPatches();
+        const result = await refreshRegionBaseline(region.id);
+        const cached = await getPatches(region.id);
         if (disposed) return;
         setPatches(cached);
-        const checked = result.lastSuccess ? `Last checked ${new Date(result.lastSuccess).toLocaleString()}.` : "No baseline cached yet.";
+        const checked = result.lastSuccess ? `Last checked ${new Date(result.lastSuccess).toLocaleString(region.locale, { timeZone: region.timeZone })}.` : "No baseline cached yet.";
+        if (!result.available) { setBaselineMessage(`No public dataset configured for ${region.name}. Local observations remain available.`); return; }
         setBaselineMessage(result.retryPending ? `${checked} Update pending; retrying automatically.` : checked);
       } catch (err) {
-        if (!disposed) setBaselineMessage(`Seattle update unavailable. Keeping cached reports; retrying automatically. ${err instanceof Error ? err.message : ""}`);
+        if (!disposed) setBaselineMessage(`${region.name} update unavailable. Keeping cached reports; retrying automatically. ${err instanceof Error ? err.message : ""}`);
       } finally {
         checking = false;
         if (!disposed) setBaselineLoading(false);
@@ -81,7 +99,7 @@ export default function App() {
     };
     const initialize = async () => {
       try {
-        const cached = await getPatches();
+        const cached = await getPatches(region.id);
         if (disposed) return;
         setPatches(cached);
         await refresh();
@@ -103,7 +121,13 @@ export default function App() {
       window.removeEventListener("focus", onReturn);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [showToast]);
+  }, [showToast, region]);
+
+  useEffect(() => {
+    if (region.id === DEFAULT_REGION_ID || !mapReady || !patches.length || autoFitRegionRef.current === region.id) return;
+    autoFitRegionRef.current = region.id;
+    mapRef.current?.fitToPatches(patches);
+  }, [mapReady, patches, region.id]);
 
   const resetMode = useCallback(() => {
     mapRef.current?.dismissTooltip();
@@ -111,10 +135,29 @@ export default function App() {
     setMode("browse");
     setPendingLngLat(null);
     setEditingPatch(null);
-    setPathCheckResult(null);
     setMeasureCoords([]);
+    setDrawingFinished(false);
     // mode prop change triggers clearDraw/clearTempMarker inside curb-map's updated()
   }, []);
+
+  const handleRegionChange = (id: string) => {
+    const next = getRegion(id);
+    resetMode();
+    activeRegion.current = next.id;
+    autoFitRegionRef.current = null;
+    setMapReady(false);
+    setPatches([]);
+    setSelectedId(null);
+    setGroupIds(null);
+    setMapCenter(null);
+    setToast(null);
+    undoPatchRef.current = null;
+    setFilters({ query: "", category: "", severity: "", status: "", sort: "date-desc" });
+    setBaselineMessage(`Checking ${next.name} data...`);
+    setRegionId(next.id);
+    try { localStorage.setItem("blipmap:region", next.id); }
+    catch { showToast("Region changed for this session; this browser could not save the preference."); }
+  };
 
   // ESC → browse; Enter → finish drawing; ? → shortcuts
   useEffect(() => {
@@ -122,7 +165,7 @@ export default function App() {
       const target = e.target as HTMLElement;
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT") return;
       if (e.key === "Escape") { resetMode(); setShowShortcuts(false); }
-      if (e.key === "Enter" && (mode === "measure" || mode === "path-check")) mapRef.current?.finishDrawing();
+      if (e.key === "Enter" && !e.composedPath().some(element => element instanceof HTMLElement && element.matches("button, a, input, select, textarea")) && (mode === "measure" || mode === "path-check")) mapRef.current?.finishDrawing();
       if (e.key === "?") setShowShortcuts((v) => !v);
       if (e.key === "l" || e.key === "L") mapRef.current?.locateMe();
     };
@@ -163,6 +206,7 @@ export default function App() {
 
   const measureResult = useMemo(() => measurePath(measureCoords), [measureCoords]);
   const detailsPatch = useMemo(() => patches.find((patch) => patch.id === detailsId), [patches, detailsId]);
+  const groupPatches = useMemo(() => groupIds ? patches.filter(patch => groupIds.includes(patch.id)) : [], [patches, groupIds]);
 
   // ── Map event handlers ──────────────────────────────────────────────────────
 
@@ -182,6 +226,7 @@ export default function App() {
 
   const handleMeasureChange = useCallback((e: Event) => {
     setMeasureCoords((e as CustomEvent<{ coords: Position[] }>).detail.coords);
+    setDrawingFinished(false);
   }, []);
 
   const handleLocate = useCallback(() => { mapRef.current?.locateMe(); }, []);
@@ -209,31 +254,36 @@ export default function App() {
   }, []);
 
   const handlePathComplete = useCallback((e: Event) => {
-    if (mode !== "path-check") return;
+    setDrawingFinished(true);
     const coords = (e as CustomEvent<{ coords: Position[] }>).detail.coords;
-    setPathCheckResult(runPathCheck(coords, patches));
-  }, [mode, patches]);
+    setMeasureCoords(coords);
+  }, []);
 
   // ── Patch CRUD ──────────────────────────────────────────────────────────────
 
   const handleSavePatch = useCallback(async (patch: Patch) => {
     await savePatch(patch);
-    setPatches((prev) => [...prev, patch]);
+    const records = await getPatches(region.id);
+    if (activeRegion.current !== region.id) return;
+    setPatches(records);
     setSelectedId(patch.id);
     setPendingLngLat(null);
     mapRef.current?.clearTempMarker();
     setMode("browse");
-  }, []);
+    if (patchRegion(patch) !== region.id) showToast(`Saved in ${getRegion(patchRegion(patch)).name}.`);
+  }, [region, showToast]);
 
   const handleUpdatePatch = useCallback(async (patch: Patch) => {
     await updatePatch(patch);
+    if (activeRegion.current !== region.id) return;
     setPatches((prev) => prev.map((p) => (p.id === patch.id ? patch : p)));
     setEditingPatch(null);
-  }, []);
+  }, [region]);
 
   const handleDeletePatch = useCallback(async (id: string) => {
     const toDelete = patches.find((p) => p.id === id);
     await deletePatch(id);
+    if (activeRegion.current !== region.id) return;
     setPatches((prev) => prev.filter((p) => p.id !== id));
     if (selectedId === id) setSelectedId(null);
     if (detailsId === id) setDetailsId(null);
@@ -246,11 +296,11 @@ export default function App() {
           const p = undoPatchRef.current;
           undoPatchRef.current = null;
           await savePatch(p);
-          setPatches((prev) => [...prev, p]);
+          if (activeRegion.current === region.id) setPatches((prev) => [...prev, p]);
         },
       });
     }
-  }, [selectedId, patches, showToast]);
+  }, [selectedId, patches, showToast, region]);
 
   const handleCancelForm = useCallback(() => {
     setPendingLngLat(null);
@@ -264,7 +314,7 @@ export default function App() {
   const handleModeChange = useCallback((newMode: MapMode) => {
     setDetailsId(null);
     if (newMode !== mode) {
-      setPathCheckResult(null);
+      setDrawingFinished(false);
       setMeasureCoords([]);
       setPendingLngLat(null);
     }
@@ -305,7 +355,9 @@ export default function App() {
     e.target.value = "";
     try {
       const result = await importFromFile(file);
-      setPatches(await getPatches());
+      const records = await getPatches(region.id);
+      if (activeRegion.current !== region.id) return;
+      setPatches(records);
       showToast(
         result.skipped > 0
           ? `Imported ${result.patches.length} Patches. Skipped ${result.skipped} invalid records.`
@@ -314,31 +366,61 @@ export default function App() {
     } catch (err) {
       showToast(`Import failed: ${err instanceof Error ? err.message : "Unknown error"}`);
     }
-  }, [showToast]);
+  }, [showToast, region]);
 
   const handleClearSeed = useCallback(async () => {
-    if (!confirm("Remove all patches?")) return;
-    await clearPatches();
-    setPatches([]);
-    setSelectedId(null);
-  }, []);
+    if (!confirm(`Clear all patches in ${region.name} from the map? You can recover them with Restore patches.`)) return;
+    setPatchStorageBusy(true);
+    try {
+      await clearPatches(region.id);
+      setPatches([]);
+      setSelectedId(null);
+      setDetailsId(null);
+      showToast("Patches cleared. Restore patches brings them back.");
+    } catch (error) {
+      showToast(`Could not clear patches: ${error instanceof Error ? error.message : "Storage unavailable"}`);
+    } finally { setPatchStorageBusy(false); }
+  }, [showToast, region]);
+
+  const handleRestorePatches = useCallback(async () => {
+    setPatchStorageBusy(true);
+    try {
+      const restored = await restorePatches(region.id);
+      const records = await getPatches(region.id);
+      setFilters({ query: "", category: "", severity: "", status: "", sort: "date-desc" });
+      setPatches(records);
+      if (records.length) mapRef.current?.fitToPatches(records);
+      showToast(restored ? `Restored ${restored} patches.` : "No cleared patches are available to restore.");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Could not restore patches.");
+    } finally { setPatchStorageBusy(false); }
+  }, [showToast, region]);
 
   const showForm = pendingLngLat !== null || editingPatch !== null;
-  const showMeasurePanel = (mode === "measure" || mode === "path-check") && measureCoords.length > 0 && !pathCheckResult;
+  const drawingMode = mode === "measure" || mode === "path-check";
+  const clearDrawing = () => {
+    mapRef.current?.clearDraw();
+    setMeasureCoords([]);
+    setDrawingFinished(false);
+  };
 
   return (
     <div className="app">
       <CurbMap
+        key={region.id}
+        regionId={region.id}
         ref={mapRef}
         mode={mode}
         patches={filteredPatches}
         selectedId={selectedId}
+        onMapReady={() => setMapReady(true)}
         onMapClick={handleMapClick}
         onRecordSelect={handleRecordSelect}
         onMeasureChange={handleMeasureChange}
         onPathComplete={handlePathComplete}
         onMapCenter={handleMapCenter}
         onLocateError={handleLocateError}
+        onGroupChange={event => setGroupIds((event as CustomEvent<{ ids: string[] | null }>).detail.ids)}
         style={{ width: "100%", height: "100%" }}
       />
 
@@ -365,7 +447,9 @@ export default function App() {
         onLocate={handleLocate}
       />
 
-      <RecordsPanel
+      {!drawingMode && mode !== "route" && !groupIds && <RecordsPanel
+        region={region}
+        onRegionChange={handleRegionChange}
         patches={filteredPatches}
         allPatchCount={patches.length}
         selectedId={selectedId}
@@ -375,9 +459,12 @@ export default function App() {
         onEdit={setEditingPatch}
         onDelete={handleDeletePatch}
         onClearSeed={handleClearSeed}
+        onRestore={handleRestorePatches}
+        storageBusy={patchStorageBusy}
         baselineLoading={baselineLoading}
         baselineMessage={baselineMessage}
-      />
+        onPlanRoute={() => handleModeChange("route")}
+      />}
 
       {showForm && (
         <PatchForm
@@ -396,23 +483,36 @@ export default function App() {
         />
       )}
 
-      {showMeasurePanel && (
-        <MeasurePanel
-          result={measureResult}
-          coordCount={measureCoords.length}
-          mode={mode}
-          onFinish={() => mapRef.current?.finishDrawing()}
-          onClear={resetMode}
-        />
-      )}
+      {drawingMode && <ContextPanel title={mode === "path-check" ? "Path Check" : "Measure"} actions={<>
+        <button className="btn btn--primary context-panel__primary" disabled={measureCoords.length < 2 || drawingFinished}
+          onClick={() => mapRef.current?.finishDrawing()}>
+          <PanelIcon icon={Check} />{drawingFinished ? (mode === "path-check" ? "Path complete" : "Measurement complete") : (mode === "path-check" ? "Finish drawing" : "Finish measurement")}
+        </button>
+        <button className="btn" disabled={measureCoords.length === 0} onClick={clearDrawing}>
+          <PanelIcon icon={RotateCcw} />{drawingFinished ? "Draw again" : "Clear drawing"}
+        </button>
+        <button className="btn" onClick={resetMode} aria-label={mode === "path-check" ? "Exit Path Check" : "Exit measurement"}>
+          <PanelIcon icon={X} />Exit tool
+        </button>
+      </>}>
+        {pathCheckResult ? <PathCheckPanel result={pathCheckResult} onSelectPatch={handlePanelSelect} /> :
+          <MeasurePanel result={measureResult} coordCount={measureCoords.length} mode={mode} finished={drawingFinished} />}
+      </ContextPanel>}
 
-      {pathCheckResult && (
-        <PathCheckPanel
-          result={pathCheckResult}
-          onSelectPatch={handlePanelSelect}
-          onClose={resetMode}
-        />
-      )}
+      {!drawingMode && groupIds && <ContextPanel title="Selected group" actions={
+        <button className="btn btn--primary context-panel__primary" onClick={() => mapRef.current?.returnToGroups()}>
+          <PanelIcon icon={ArrowLeft} />Back to groups
+        </button>
+      }>
+        <p className="context-panel__summary" role="status">{groupPatches.length} issues in this group</p>
+        <div className="context-panel__list" role="list" aria-label="Group issues">
+          {groupPatches.map(patch => <div role="listitem" key={patch.id}>
+            <CurbRecordCard patchId={patch.id} title={patch.properties.title} category={patch.properties.category}
+              severity={patch.properties.severity} status={patch.properties.status} selected={selectedId === patch.id}
+              onRecordSelect={() => handlePanelSelect(patch.id)} />
+          </div>)}
+        </div>
+      </ContextPanel>}
 
       {toast && (
         <div className="toast" role="status" aria-live="polite">
@@ -432,9 +532,10 @@ export default function App() {
         <ShortcutsModal onClose={() => setShowShortcuts(false)} />
       )}
 
-      {mode === "route" && account.ready && (
+      {mode === "route" && !groupIds && account.ready && (
         <RoutePanel
-          key={`route-${account.session?.user.id ?? "guest"}`}
+          key={`route-${region.id}-${account.session?.user.id ?? "guest"}`}
+          region={region}
           patches={patches}
           profile={profile}
           favorites={account.favorites}
@@ -447,10 +548,12 @@ export default function App() {
         />
       )}
 
-      {mode === "route" && !account.ready && <div className="route-panel" role="status">
+      {mode === "route" && !groupIds && !account.ready && <ContextPanel title="Route planner" actions={
+        <button className="btn context-panel__primary" onClick={resetMode}><PanelIcon icon={X} />Exit route planner</button>
+      }><div className="route-panel" role="status">
         <p>{account.error || "Loading private preferences before routing..."}</p>
         <button className="btn" onClick={() => setShowAccount(true)}>Account</button>
-      </div>}
+      </div></ContextPanel>}
 
       {showProfile && account.ready && !(showAccount || account.recovery) && (
         <ProfileDrawer

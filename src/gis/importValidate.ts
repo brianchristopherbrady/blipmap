@@ -1,6 +1,7 @@
 import type { Patch, PatchCategory, PatchSeverity, PatchStatus } from "../types/patch";
 import { VALID_CATEGORIES, VALID_SEVERITIES, VALID_STATUSES } from "../types/patch";
 import { parsePatchSource } from "./seattleBaseline";
+import { inferRegion } from "../config/regions";
 
 export interface ImportResult {
   patches: Patch[];
@@ -18,7 +19,8 @@ function coercePatch(raw: unknown): Patch | null {
   const coords = geom["coordinates"] as unknown[];
   if (!Array.isArray(coords) || coords.length < 2) return null;
   const [lng, lat] = coords as number[];
-  if (typeof lng !== "number" || typeof lat !== "number") return null;
+  if (typeof lng !== "number" || typeof lat !== "number" || !Number.isFinite(lng) || !Number.isFinite(lat)
+    || Math.abs(lng) > 180 || Math.abs(lat) > 90) return null;
 
   const props = ((r["properties"] ?? {}) as Record<string, unknown>);
   const now = new Date().toISOString();
@@ -33,11 +35,12 @@ function coercePatch(raw: unknown): Patch | null {
   const importedId = r["id"] ?? props["id"];
 
   return {
-    id: source ? `project-sidewalk-seattle:${source.sourceId}`
+    id: source ? `${source.provider}:${source.sourceId}`
       : (typeof importedId === "string" && importedId) ? importedId : crypto.randomUUID(),
     type: "Feature",
     geometry: { type: "Point", coordinates: [lng, lat] },
     properties: {
+      regionId: inferRegion([lng, lat]),
       title: typeof props["title"] === "string" && props["title"].trim()
         ? props["title"].trim() : "Imported patch",
       category,

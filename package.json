@@ -20,13 +20,15 @@
     "@turf/point-to-line-distance": "^7.1.0",
     "idb": "^8.0.0",
     "lit": "^3.2.0",
-    "maplibre-gl": "^4.7.0",
+    "lucide": "^1.47.0",
+    "maplibre-gl": "^6.11.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
     "@playwright/test": "^1.63.0",
+    "@types/node": "^26.6.2",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.3",

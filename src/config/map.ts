@@ -1,4 +1,5 @@
 import type { StyleSpecification } from "maplibre-gl";
+import { DEFAULT_REGION_ID, getRegion } from "./regions";
 
 // Only place tile URLs may live — swap here for a production provider
 export const MAP_STYLE: StyleSpecification = {
@@ -15,5 +16,5 @@ export const MAP_STYLE: StyleSpecification = {
   layers: [{ id: "osm-tiles", type: "raster", source: "osm", minzoom: 0, maxzoom: 19 }],
 };
 
-export const MAP_CENTER: [number, number] = [-122.335, 47.608]; // Seattle
-export const MAP_ZOOM = 14;
+export const MAP_CENTER = getRegion(DEFAULT_REGION_ID).map.center;
+export const MAP_ZOOM = getRegion(DEFAULT_REGION_ID).map.zoom;

@@ -51,8 +51,10 @@ async function prepare(page: Page, profile: string, nearbyBarrier = false, local
   }
   await page.getByRole("button", { name: "Route", exact: true }).click();
   await page.getByLabel("From", { exact: true }).fill("Start");
+  await page.getByRole("button", { name: "Search from address" }).click();
   await page.getByRole("option", { name: "Seattle start", exact: true }).click();
   await page.getByLabel("To", { exact: true }).fill("Finish");
+  await page.getByRole("button", { name: "Search to address" }).click();
   await page.getByRole("option", { name: "Seattle end", exact: true }).click();
   await expect(page.getByRole("button", { name: "Get route", exact: true })).toBeEnabled();
 }
@@ -179,7 +181,7 @@ for (const width of [1280, 390]) {
       await expect(dialog.getByRole("heading", { name: title, exact: true })).toBeFocused();
       await expect(dialog.getByRole("heading", { name: "Original imagery unavailable" })).toBeVisible();
       await expect(dialog).toContainText("no verified link to an original image or panorama");
-      await expect(dialog).toContainText("Observation data is CC0. This does not license the source imagery.");
+      await expect(dialog).toContainText("Observation data: CC0. Observation data only; excludes imagery.");
       await expect(dialog.getByRole("link", { name: "Project Sidewalk Seattle source information" })).toBeVisible();
       await expect(dialog.getByRole("link", { name: "View original report" })).toHaveCount(0);
       await expect(dialog.locator("img, iframe")).toHaveCount(0);

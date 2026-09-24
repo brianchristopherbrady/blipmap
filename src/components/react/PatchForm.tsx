@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from "react";
+import { inferRegion } from "../../config/regions";
 import type { Patch, PatchCategory, PatchSeverity, PatchStatus } from "../../types/patch";
 import {
   CATEGORY_LABELS, SEVERITY_LABELS, STATUS_LABELS,
@@ -57,6 +58,7 @@ export function PatchForm({ lngLat, patch, onSave, onCancel }: PatchFormProps) {
       type: "Feature",
       geometry: { type: "Point", coordinates: [coords.lng, coords.lat] },
       properties: {
+        regionId: inferRegion([coords.lng, coords.lat]),
         title: title.trim(),
         category,
         severity,

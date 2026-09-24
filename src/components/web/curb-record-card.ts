@@ -28,6 +28,10 @@ export class CurbRecordCard extends LitElement {
       transition: box-shadow 120ms ease, border-color 120ms ease;
     }
 
+    @media (prefers-reduced-motion: reduce) {
+      .card { transition: none; }
+    }
+
     .card:hover { box-shadow: 0 1px 6px rgba(0,0,0,0.08); }
 
     :host([selected]) .card {
