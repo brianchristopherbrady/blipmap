@@ -2,6 +2,9 @@ import { LitElement, html, css, unsafeCSS } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import * as maplibregl from "maplibre-gl";
 import maplibreCss from "maplibre-gl/dist/maplibre-gl.css?inline";
+import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
+
+maplibregl.setWorkerUrl(maplibreWorkerUrl);
 import { MAP_STYLE } from "../../config/map";
 import { DEFAULT_REGION_ID, getRegion } from "../../config/regions";
 import type { Patch, MapMode } from "../../types/patch";
